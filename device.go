@@ -14,6 +14,7 @@ type DisplayFunc func(deviceKind Kind, premix *PremixData)
 
 // Device is an interface to output device operations
 type Device interface {
+	Name() string
 	Play(in <-chan *PremixData)
 	Close()
 }

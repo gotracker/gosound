@@ -6,9 +6,20 @@ import (
 	"strings"
 )
 
+const fileName = "file"
+
 var (
 	fileDeviceMap = make(map[string]createOutputDeviceFunc)
 )
+
+type fileDevice struct {
+	device
+}
+
+// Name returns the device name
+func (d *fileDevice) Name() string {
+	return fileName
+}
 
 func newFileDevice(settings Settings) (Device, error) {
 	ext := strings.ToLower(path.Ext(settings.Filepath))
@@ -20,7 +31,7 @@ func newFileDevice(settings Settings) (Device, error) {
 }
 
 func init() {
-	Map["file"] = deviceDetails{
+	Map[fileName] = deviceDetails{
 		create: newFileDevice,
 		kind:   KindFile,
 	}

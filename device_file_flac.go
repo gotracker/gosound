@@ -15,7 +15,7 @@ import (
 )
 
 type fileDeviceFlac struct {
-	device
+	fileDevice
 	mix              mixing.Mixer
 	samplesPerSecond int
 
@@ -25,8 +25,10 @@ type fileDeviceFlac struct {
 
 func newFileFlacDevice(settings Settings) (Device, error) {
 	fd := fileDeviceFlac{
-		device: device{
-			onRowOutput: settings.OnRowOutput,
+		fileDevice: fileDevice{
+			device: device{
+				onRowOutput: settings.OnRowOutput,
+			},
 		},
 		mix: mixing.Mixer{
 			Channels:      settings.Channels,

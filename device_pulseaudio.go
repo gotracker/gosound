@@ -8,6 +8,8 @@ import (
 	"github.com/heucuva/gosound/internal/pulseaudio"
 )
 
+const pulseaudioName = "pulseaudio"
+
 type pulseaudioDevice struct {
 	device
 	mix mixing.Mixer
@@ -34,6 +36,11 @@ func newPulseAudioDevice(settings Settings) (Device, error) {
 	return &d, nil
 }
 
+// Name returns the device name
+func (d *pulseaudioDevice) Name() string {
+	return pulseaudioName
+}
+
 // Play starts the wave output device playing
 func (d *pulseaudioDevice) Play(in <-chan *PremixData) {
 	panmixer := mixing.GetPanMixer(d.mix.Channels)
@@ -54,7 +61,7 @@ func (d *pulseaudioDevice) Close() {
 }
 
 func init() {
-	Map["pulseaudio"] = deviceDetails{
+	Map[pulseaudioName] = deviceDetails{
 		create: newPulseAudioDevice,
 		kind:   KindSoundCard,
 	}

@@ -13,6 +13,8 @@ import (
 	"github.com/heucuva/gosound/internal/win32/directsound"
 )
 
+const dsoundName = "directsound"
+
 type dsoundDevice struct {
 	device
 
@@ -53,6 +55,11 @@ func newDSoundDevice(settings Settings) (Device, error) {
 	d.wfx = wfx
 
 	return &d, nil
+}
+
+// Name returns the device name
+func (d *dsoundDevice) Name() string {
+	return dsoundName
 }
 
 // Play starts the wave output device playing
@@ -162,7 +169,7 @@ func (d *dsoundDevice) Close() {
 }
 
 func init() {
-	Map["directsound"] = deviceDetails{
+	Map[dsoundName] = deviceDetails{
 		create: newDSoundDevice,
 		kind:   KindSoundCard,
 	}

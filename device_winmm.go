@@ -11,6 +11,8 @@ import (
 	"github.com/heucuva/gosound/internal/win32/winmm"
 )
 
+const winmmName = "winmm"
+
 type winmmDevice struct {
 	device
 	mix     mixing.Mixer
@@ -36,6 +38,11 @@ func newWinMMDevice(settings Settings) (Device, error) {
 		return nil, errors.New("could not create winmm device")
 	}
 	return &d, nil
+}
+
+// Name returns the device name
+func (d *winmmDevice) Name() string {
+	return winmmName
 }
 
 // Play starts the wave output device playing
@@ -76,7 +83,7 @@ func (d *winmmDevice) Close() {
 }
 
 func init() {
-	Map["winmm"] = deviceDetails{
+	Map[winmmName] = deviceDetails{
 		create: newWinMMDevice,
 		kind:   KindSoundCard,
 	}

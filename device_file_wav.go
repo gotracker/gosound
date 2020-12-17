@@ -10,7 +10,7 @@ import (
 )
 
 type fileDeviceWav struct {
-	device
+	fileDevice
 	mix mixing.Mixer
 
 	f  *os.File
@@ -25,8 +25,10 @@ const (
 
 func newFileWavDevice(settings Settings) (Device, error) {
 	fd := fileDeviceWav{
-		device: device{
-			onRowOutput: settings.OnRowOutput,
+		fileDevice: fileDevice{
+			device: device{
+				onRowOutput: settings.OnRowOutput,
+			},
 		},
 		mix: mixing.Mixer{
 			Channels:      settings.Channels,
