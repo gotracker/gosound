@@ -3,9 +3,9 @@
 package gosound
 
 import (
-	"github.com/heucuva/gomixing/mixing"
+	"github.com/gotracker/gomixing/mixing"
 
-	"github.com/heucuva/gosound/internal/pulseaudio"
+	"github.com/gotracker/gosound/internal/pulseaudio"
 )
 
 const pulseaudioName = "pulseaudio"

@@ -8,7 +8,7 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/heucuva/gosound/internal/win32"
+	"github.com/gotracker/gosound/internal/win32"
 )
 
 var (

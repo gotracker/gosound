@@ -1,9 +1,9 @@
-module github.com/heucuva/gosound
+module github.com/gotracker/gosound
 
 go 1.15
 
 require (
-	github.com/heucuva/gomixing v1.0.0
+	github.com/gotracker/gomixing v1.0.0
 	github.com/icza/mighty v0.0.0-20200205104645-c377cb773678 // indirect
 	github.com/jfreymuth/pulse v0.1.0
 	github.com/mewkiz/flac v1.0.6

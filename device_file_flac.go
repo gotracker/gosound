@@ -11,7 +11,7 @@ import (
 	"github.com/mewkiz/flac/frame"
 	"github.com/mewkiz/flac/meta"
 
-	"github.com/heucuva/gomixing/mixing"
+	"github.com/gotracker/gomixing/mixing"
 )
 
 type fileDeviceFlac struct {

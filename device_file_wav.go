@@ -6,7 +6,7 @@ import (
 	"errors"
 	"os"
 
-	"github.com/heucuva/gomixing/mixing"
+	"github.com/gotracker/gomixing/mixing"
 )
 
 type fileDeviceWav struct {

@@ -1,6 +1,6 @@
 package gosound
 
-import "github.com/heucuva/gomixing/mixing"
+import "github.com/gotracker/gomixing/mixing"
 
 // PremixData is a structure containing the audio pre-mix data for a specific row or buffer
 type PremixData struct {

@@ -7,10 +7,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/heucuva/gomixing/mixing"
+	"github.com/gotracker/gomixing/mixing"
 
-	"github.com/heucuva/gosound/internal/win32"
-	"github.com/heucuva/gosound/internal/win32/directsound"
+	"github.com/gotracker/gosound/internal/win32"
+	"github.com/gotracker/gosound/internal/win32/directsound"
 )
 
 const dsoundName = "directsound"
