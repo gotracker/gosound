@@ -4,6 +4,7 @@ package gosound
 
 import (
 	"bufio"
+	"context"
 	"errors"
 	"os"
 
@@ -51,7 +52,12 @@ func newFileFlacDevice(settings Settings) (Device, error) {
 }
 
 // Play starts the wave output device playing
-func (d *fileDeviceFlac) Play(in <-chan *PremixData) {
+func (d *fileDeviceFlac) Play(in <-chan *PremixData) error {
+	return d.PlayWithCtx(context.Background(), in)
+}
+
+// PlayWithCtx starts the wave output device playing
+func (d *fileDeviceFlac) PlayWithCtx(ctx context.Context, in <-chan *PremixData) error {
 	w := bufio.NewWriter(d.f)
 	d.w = w
 	// Encode FLAC stream.
@@ -64,11 +70,15 @@ func (d *fileDeviceFlac) Play(in <-chan *PremixData) {
 	}
 	enc, err := flac.NewEncoder(w, si)
 	if err != nil {
-		return
+		return err
 	}
 	defer enc.Close()
 
 	panmixer := mixing.GetPanMixer(d.mix.Channels)
+	if panmixer == nil {
+		return errors.New("invalid pan mixer - check channel count")
+	}
+
 	var channels frame.Channels
 	switch d.mix.Channels {
 	case 1:
@@ -79,47 +89,58 @@ func (d *fileDeviceFlac) Play(in <-chan *PremixData) {
 		channels = frame.ChannelsLRLsRs
 	}
 
-	for row := range in {
-		mixedData := d.mix.FlattenToInts(panmixer, row.SamplesLen, row.Data)
-		subframes := make([]*frame.Subframe, d.mix.Channels)
-		for i := range subframes {
-			subframe := &frame.Subframe{
-				SubHeader: frame.SubHeader{
-					Pred: frame.PredVerbatim,
-				},
-				Samples:  mixedData[i],
-				NSamples: row.SamplesLen,
+	myCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	for {
+		select {
+		case <-myCtx.Done():
+			return myCtx.Err()
+		case row, ok := <-in:
+			if !ok {
+				return nil
 			}
-			subframes[i] = subframe
-		}
-		for _, subframe := range subframes {
-			sample := subframe.Samples[0]
-			constant := true
-			for _, s := range subframe.Samples[1:] {
-				if sample != s {
-					constant = false
+			mixedData := d.mix.FlattenToInts(panmixer, row.SamplesLen, row.Data)
+			subframes := make([]*frame.Subframe, d.mix.Channels)
+			for i := range subframes {
+				subframe := &frame.Subframe{
+					SubHeader: frame.SubHeader{
+						Pred: frame.PredVerbatim,
+					},
+					Samples:  mixedData[i],
+					NSamples: row.SamplesLen,
+				}
+				subframes[i] = subframe
+			}
+			for _, subframe := range subframes {
+				sample := subframe.Samples[0]
+				constant := true
+				for _, s := range subframe.Samples[1:] {
+					if sample != s {
+						constant = false
+					}
+				}
+				if constant {
+					subframe.SubHeader.Pred = frame.PredConstant
 				}
 			}
-			if constant {
-				subframe.SubHeader.Pred = frame.PredConstant
-			}
-		}
 
-		fr := &frame.Frame{
-			Header: frame.Header{
-				HasFixedBlockSize: false,
-				BlockSize:         uint16(row.SamplesLen),
-				SampleRate:        uint32(d.samplesPerSecond),
-				Channels:          channels,
-				BitsPerSample:     uint8(d.mix.BitsPerSample),
-			},
-			Subframes: subframes,
-		}
-		if err := enc.WriteFrame(fr); err != nil {
-			panic(err)
-		}
-		if d.onRowOutput != nil {
-			d.onRowOutput(KindFile, row)
+			fr := &frame.Frame{
+				Header: frame.Header{
+					HasFixedBlockSize: false,
+					BlockSize:         uint16(row.SamplesLen),
+					SampleRate:        uint32(d.samplesPerSecond),
+					Channels:          channels,
+					BitsPerSample:     uint8(d.mix.BitsPerSample),
+				},
+				Subframes: subframes,
+			}
+			if err := enc.WriteFrame(fr); err != nil {
+				return err
+			}
+			if d.onRowOutput != nil {
+				d.onRowOutput(KindFile, row)
+			}
 		}
 	}
 }

@@ -3,6 +3,7 @@
 package gosound
 
 import (
+	"context"
 	"errors"
 	"time"
 
@@ -46,31 +47,62 @@ func (d *winmmDevice) Name() string {
 }
 
 // Play starts the wave output device playing
-func (d *winmmDevice) Play(in <-chan *PremixData) {
+func (d *winmmDevice) Play(in <-chan *PremixData) error {
+	return d.PlayWithCtx(context.Background(), in)
+}
+
+// PlayWithCtx starts the wave output device playing
+func (d *winmmDevice) PlayWithCtx(ctx context.Context, in <-chan *PremixData) error {
 	type RowWave struct {
 		Wave *winmm.WaveOutData
 		Row  *PremixData
 	}
 
-	out := make(chan RowWave, 3)
 	panmixer := mixing.GetPanMixer(d.mix.Channels)
+	if panmixer == nil {
+		return errors.New("invalid pan mixer - check channel count")
+	}
+
+	myCtx, cancel := context.WithCancel(ctx)
+
+	out := make(chan RowWave, 3)
+
 	go func() {
-		for row := range in {
-			mixedData := d.mix.Flatten(panmixer, row.SamplesLen, row.Data)
-			rowWave := RowWave{
-				Wave: d.waveout.Write(mixedData),
-				Row:  row,
+		defer cancel()
+		defer close(out)
+		for {
+			select {
+			case <-myCtx.Done():
+				return
+			case row, ok := <-in:
+				if !ok {
+					return
+				}
+				mixedData := d.mix.Flatten(panmixer, row.SamplesLen, row.Data)
+				rowWave := RowWave{
+					Wave: d.waveout.Write(mixedData),
+					Row:  row,
+				}
+				out <- rowWave
 			}
-			out <- rowWave
 		}
-		close(out)
 	}()
-	for rowWave := range out {
-		if d.onRowOutput != nil {
-			d.onRowOutput(KindSoundCard, rowWave.Row)
-		}
-		for !d.waveout.IsHeaderFinished(rowWave.Wave) {
-			time.Sleep(time.Microsecond * 1)
+
+	for {
+		select {
+		case <-myCtx.Done():
+			return myCtx.Err()
+		case rowWave, ok := <-out:
+			if !ok {
+				// done!
+				return nil
+			}
+			if d.onRowOutput != nil {
+				d.onRowOutput(KindSoundCard, rowWave.Row)
+			}
+			for !d.waveout.IsHeaderFinished(rowWave.Wave) {
+				time.Sleep(time.Microsecond * 1)
+			}
 		}
 	}
 }

@@ -3,6 +3,7 @@
 package gosound
 
 import (
+	"context"
 	"errors"
 	"sync/atomic"
 	"time"
@@ -63,7 +64,12 @@ func (d *dsoundDevice) Name() string {
 }
 
 // Play starts the wave output device playing
-func (d *dsoundDevice) Play(in <-chan *PremixData) {
+func (d *dsoundDevice) Play(in <-chan *PremixData) error {
+	return d.PlayWithCtx(context.Background(), in)
+}
+
+// PlayWithCtx starts the wave output device playing
+func (d *dsoundDevice) PlayWithCtx(ctx context.Context, in <-chan *PremixData) error {
 	type RowWave struct {
 		PlayOffset uint32
 		Row        *PremixData
@@ -71,23 +77,25 @@ func (d *dsoundDevice) Play(in <-chan *PremixData) {
 
 	event, err := win32.CreateEvent()
 	if err != nil {
-		return
+		return err
 	}
 	defer win32.CloseHandle(event)
 
-	out := make(chan RowWave, 3)
 	panmixer := mixing.GetPanMixer(d.mix.Channels)
+	if panmixer == nil {
+		return errors.New("invalid pan mixer - check channel count")
+	}
 
 	playbackSize := int(d.wfx.NAvgBytesPerSec * 2)
 	lpdsb, err := d.ds.CreateSoundBufferSecondary(d.wfx, playbackSize)
 	if err != nil {
-		return
+		return err
 	}
 	defer lpdsb.Release()
 
 	notify, err := lpdsb.GetNotify()
 	if err != nil {
-		return
+		return err
 	}
 	defer notify.Release()
 
@@ -99,35 +107,49 @@ func (d *dsoundDevice) Play(in <-chan *PremixData) {
 	}
 
 	if err := notify.SetNotificationPositions(pn); err != nil {
-		return
+		return err
 	}
 
 	// play (looping)
-	lpdsb.Play(true)
+	if err := lpdsb.Play(true); err != nil {
+		return err
+	}
 
 	done := make(chan struct{}, 1)
 	defer close(done)
 
+	myCtx, cancel := context.WithCancel(ctx)
+
+	out := make(chan RowWave, 3)
 	go func() {
+		defer close(out)
+		defer cancel()
 		writePos := 0
-		for row := range in {
-			var rowWave RowWave
-			//_, writePos, err := lpdsb.GetCurrentPosition()
-			numBytes := row.SamplesLen * int(d.wfx.NBlockAlign)
-			segments, err := lpdsb.Lock(writePos%playbackSize, numBytes)
-			if err != nil {
-				continue
+		for {
+			select {
+			case <-myCtx.Done():
+				return
+			case row, ok := <-in:
+				if !ok {
+					return
+				}
+				var rowWave RowWave
+				//_, writePos, err := lpdsb.GetCurrentPosition()
+				numBytes := row.SamplesLen * int(d.wfx.NBlockAlign)
+				segments, err := lpdsb.Lock(writePos%playbackSize, numBytes)
+				if err != nil {
+					continue
+				}
+				d.mix.FlattenTo(segments, panmixer, row.SamplesLen, row.Data)
+				if err := lpdsb.Unlock(segments); err != nil {
+					continue
+				}
+				rowWave.Row = row
+				writePos += numBytes
+				rowWave.PlayOffset = uint32(writePos)
+				out <- rowWave
 			}
-			d.mix.FlattenTo(segments, panmixer, row.SamplesLen, row.Data)
-			if err := lpdsb.Unlock(segments); err != nil {
-				continue
-			}
-			rowWave.Row = row
-			writePos += numBytes
-			rowWave.PlayOffset = uint32(writePos)
-			out <- rowWave
 		}
-		close(out)
 	}()
 	playBase := uint32(0)
 	go func() {
@@ -156,6 +178,7 @@ func (d *dsoundDevice) Play(in <-chan *PremixData) {
 		}
 	}
 	done <- struct{}{}
+	return nil
 }
 
 // Close closes the wave output device

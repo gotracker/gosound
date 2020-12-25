@@ -3,7 +3,10 @@
 package gosound
 
 import (
+	"context"
+
 	"github.com/gotracker/gomixing/mixing"
+	"github.com/pkg/errors"
 
 	"github.com/gotracker/gosound/internal/pulseaudio"
 )
@@ -42,13 +45,33 @@ func (d *pulseaudioDevice) Name() string {
 }
 
 // Play starts the wave output device playing
-func (d *pulseaudioDevice) Play(in <-chan *PremixData) {
+func (d *pulseaudioDevice) Play(in <-chan *PremixData) error {
+	return d.PlayWithCtx(context.Background(), in)
+}
+
+// PlayWithCtx starts the wave output device playing
+func (d *pulseaudioDevice) PlayWithCtx(ctx context.Context, in <-chan *PremixData) error {
 	panmixer := mixing.GetPanMixer(d.mix.Channels)
-	for row := range in {
-		mixedData := d.mix.Flatten(panmixer, row.SamplesLen, row.Data)
-		d.pa.Output(mixedData)
-		if d.onRowOutput != nil {
-			d.onRowOutput(KindSoundCard, row)
+	if panmixer == nil {
+		return errors.New("invalid pan mixer - check channel count")
+	}
+
+	myCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	for {
+		select {
+		case <-myCtx.Done():
+			return myCtx.Err()
+		case row, ok := <-in:
+			if !ok {
+				return nil
+			}
+			mixedData := d.mix.Flatten(panmixer, row.SamplesLen, row.Data)
+			d.pa.Output(mixedData)
+			if d.onRowOutput != nil {
+				d.onRowOutput(KindSoundCard, row)
+			}
 		}
 	}
 }

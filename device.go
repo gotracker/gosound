@@ -1,6 +1,8 @@
 package gosound
 
 import (
+	"context"
+
 	"github.com/pkg/errors"
 )
 
@@ -15,7 +17,8 @@ type DisplayFunc func(deviceKind Kind, premix *PremixData)
 // Device is an interface to output device operations
 type Device interface {
 	Name() string
-	Play(in <-chan *PremixData)
+	Play(in <-chan *PremixData) error
+	PlayWithCtx(ctx context.Context, in <-chan *PremixData) error
 	Close()
 }
 
