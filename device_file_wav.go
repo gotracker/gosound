@@ -98,7 +98,7 @@ func (d *fileDeviceWav) PlayWithCtx(ctx context.Context, in <-chan *PremixData) 
 			if !ok {
 				return nil
 			}
-			mixedData := d.mix.Flatten(panmixer, row.SamplesLen, row.Data)
+			mixedData := d.mix.Flatten(panmixer, row.SamplesLen, row.Data, row.MixerVolume)
 			d.w.Write(mixedData)
 			d.sz += uint32(len(mixedData))
 			if d.onRowOutput != nil {

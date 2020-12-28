@@ -100,7 +100,7 @@ func (d *fileDeviceFlac) PlayWithCtx(ctx context.Context, in <-chan *PremixData)
 			if !ok {
 				return nil
 			}
-			mixedData := d.mix.FlattenToInts(panmixer, row.SamplesLen, row.Data)
+			mixedData := d.mix.FlattenToInts(panmixer, row.SamplesLen, row.Data, row.MixerVolume)
 			subframes := make([]*frame.Subframe, d.mix.Channels)
 			for i := range subframes {
 				subframe := &frame.Subframe{

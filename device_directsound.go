@@ -140,7 +140,7 @@ func (d *dsoundDevice) PlayWithCtx(ctx context.Context, in <-chan *PremixData) e
 				if err != nil {
 					continue
 				}
-				d.mix.FlattenTo(segments, panmixer, row.SamplesLen, row.Data)
+				d.mix.FlattenTo(segments, panmixer, row.SamplesLen, row.Data, row.MixerVolume)
 				if err := lpdsb.Unlock(segments); err != nil {
 					continue
 				}

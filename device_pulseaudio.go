@@ -67,7 +67,7 @@ func (d *pulseaudioDevice) PlayWithCtx(ctx context.Context, in <-chan *PremixDat
 			if !ok {
 				return nil
 			}
-			mixedData := d.mix.Flatten(panmixer, row.SamplesLen, row.Data)
+			mixedData := d.mix.Flatten(panmixer, row.SamplesLen, row.Data, row.MixerVolume)
 			d.pa.Output(mixedData)
 			if d.onRowOutput != nil {
 				d.onRowOutput(KindSoundCard, row)

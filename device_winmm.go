@@ -78,7 +78,7 @@ func (d *winmmDevice) PlayWithCtx(ctx context.Context, in <-chan *PremixData) er
 				if !ok {
 					return
 				}
-				mixedData := d.mix.Flatten(panmixer, row.SamplesLen, row.Data)
+				mixedData := d.mix.Flatten(panmixer, row.SamplesLen, row.Data, row.MixerVolume)
 				rowWave := RowWave{
 					Wave: d.waveout.Write(mixedData),
 					Row:  row,
