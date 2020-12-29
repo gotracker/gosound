@@ -26,6 +26,10 @@ type dsoundDevice struct {
 	mix mixing.Mixer
 }
 
+func (d *dsoundDevice) GetKind() Kind {
+	return KindSoundCard
+}
+
 func newDSoundDevice(settings Settings) (Device, error) {
 	d := dsoundDevice{
 		device: device{

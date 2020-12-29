@@ -19,6 +19,10 @@ type pulseaudioDevice struct {
 	pa  *pulseaudio.Client
 }
 
+func (d *pulseaudioDevice) GetKind() Kind {
+	return KindSoundCard
+}
+
 func newPulseAudioDevice(settings Settings) (Device, error) {
 	d := pulseaudioDevice{
 		device: device{

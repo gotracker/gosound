@@ -22,6 +22,10 @@ type Device interface {
 	Close()
 }
 
+type kindGetter interface {
+	GetKind() Kind
+}
+
 type createOutputDeviceFunc func(settings Settings) (Device, error)
 
 type deviceDetails struct {
@@ -32,8 +36,8 @@ type deviceDetails struct {
 
 // GetKind returns the kind for the passed in device
 func GetKind(d Device) Kind {
-	if dev, ok := d.(*deviceDetails); ok {
-		return dev.kind
+	if dev, ok := d.(kindGetter); ok {
+		return dev.GetKind()
 	}
 	return KindNone
 }
@@ -50,7 +54,6 @@ func CreateOutputDevice(settings Settings) (Device, error) {
 		if err != nil {
 			return nil, err
 		}
-		dev.(*device).deviceDetails = details
 		return dev, nil
 	}
 
@@ -58,7 +61,7 @@ func CreateOutputDevice(settings Settings) (Device, error) {
 }
 
 type device struct {
-	deviceDetails
+	Device
 
 	onRowOutput DisplayFunc
 }

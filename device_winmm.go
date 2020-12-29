@@ -20,6 +20,10 @@ type winmmDevice struct {
 	waveout *winmm.WaveOut
 }
 
+func (d *winmmDevice) GetKind() Kind {
+	return KindSoundCard
+}
+
 func newWinMMDevice(settings Settings) (Device, error) {
 	d := winmmDevice{
 		device: device{

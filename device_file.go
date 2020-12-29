@@ -16,6 +16,10 @@ type fileDevice struct {
 	device
 }
 
+func (d *fileDevice) GetKind() Kind {
+	return KindFile
+}
+
 // Name returns the device name
 func (d *fileDevice) Name() string {
 	return fileName
