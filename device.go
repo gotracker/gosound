@@ -50,6 +50,7 @@ func CreateOutputDevice(settings Settings) (Device, error) {
 		if err != nil {
 			return nil, err
 		}
+		dev.(*device).deviceDetails = details
 		return dev, nil
 	}
 
@@ -57,7 +58,7 @@ func CreateOutputDevice(settings Settings) (Device, error) {
 }
 
 type device struct {
-	Device
+	deviceDetails
 
 	onRowOutput DisplayFunc
 }
