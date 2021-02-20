@@ -5,8 +5,7 @@ package gosound
 import (
 	"context"
 	"errors"
-	"sync/atomic"
-	"time"
+	"io"
 
 	"github.com/gotracker/gomixing/mixing"
 
@@ -72,51 +71,64 @@ func (d *dsoundDevice) Play(in <-chan *PremixData) error {
 	return d.PlayWithCtx(context.Background(), in)
 }
 
-// PlayWithCtx starts the wave output device playing
-func (d *dsoundDevice) PlayWithCtx(ctx context.Context, in <-chan *PremixData) error {
-	type RowWave struct {
-		PlayOffset uint32
-		Row        *PremixData
+type playbackData struct {
+	event win32.HANDLE
+	row   *PremixData
+	pos   int
+}
+
+type playbackBuffer struct {
+	buffer     *directsound.Buffer
+	notify     *directsound.Notify
+	rows       []playbackData
+	maxSamples int
+	writePos   int
+}
+
+func (p *playbackBuffer) Add(mix *mixing.Mixer, row *PremixData, pos int, size int, blockAlign int, panmixer mixing.PanMixer) (int, error) {
+	remaining := p.maxSamples - p.writePos
+	samples := row.SamplesLen - pos
+	if samples >= remaining {
+		samples = remaining
 	}
 
-	event, err := win32.CreateEvent()
+	bufPos := p.writePos * blockAlign
+	segments, err := p.buffer.Lock(bufPos, samples*blockAlign)
 	if err != nil {
-		return err
+		return 0, err
 	}
-	defer win32.CloseHandle(event)
+	writeSegs := [][]byte{}
+	if pos > 0 {
+		front := make([]byte, pos*blockAlign)
+		writeSegs = append(writeSegs, front)
+	}
+	writeSegs = append(writeSegs, segments...)
+	if samples < row.SamplesLen {
+		rem := row.SamplesLen - samples
+		rear := make([]byte, rem*blockAlign)
+		writeSegs = append(writeSegs, rear)
+	}
+	mix.FlattenTo(writeSegs, panmixer, row.SamplesLen, row.Data, row.MixerVolume)
+	if err := p.buffer.Unlock(segments); err != nil {
+		return 0, err
+	}
+
+	p.writePos += samples
+	remaining -= samples
+	if remaining <= 0 {
+		err = io.EOF
+	}
+	return samples, err
+}
+
+// PlayWithCtx starts the wave output device playing
+func (d *dsoundDevice) PlayWithCtx(ctx context.Context, in <-chan *PremixData) error {
+	maxOutstanding := 3
+	maxOutstandingEvents := 1000
 
 	panmixer := mixing.GetPanMixer(d.mix.Channels)
 	if panmixer == nil {
 		return errors.New("invalid pan mixer - check channel count")
-	}
-
-	playbackSize := int(d.wfx.NAvgBytesPerSec * 2)
-	lpdsb, err := d.ds.CreateSoundBufferSecondary(d.wfx, playbackSize)
-	if err != nil {
-		return err
-	}
-	defer lpdsb.Release()
-
-	notify, err := lpdsb.GetNotify()
-	if err != nil {
-		return err
-	}
-	defer notify.Release()
-
-	pn := []directsound.PositionNotify{
-		{
-			Offset:      uint32(playbackSize - int(d.wfx.NBlockAlign)),
-			EventNotify: event,
-		},
-	}
-
-	if err := notify.SetNotificationPositions(pn); err != nil {
-		return err
-	}
-
-	// play (looping)
-	if err := lpdsb.Play(true); err != nil {
-		return err
 	}
 
 	done := make(chan struct{}, 1)
@@ -124,11 +136,49 @@ func (d *dsoundDevice) PlayWithCtx(ctx context.Context, in <-chan *PremixData) e
 
 	myCtx, cancel := context.WithCancel(ctx)
 
-	out := make(chan RowWave, 3)
+	events := []win32.HANDLE{}
+	availableEvents := make(chan win32.HANDLE, maxOutstandingEvents)
+	defer func() {
+		for _, event := range events {
+			win32.CloseHandle(event)
+		}
+	}()
+	for i := 0; i < cap(availableEvents); i++ {
+		event, err := win32.CreateEvent()
+		if err != nil {
+			return err
+		}
+		events = append(events, event)
+		availableEvents <- event
+	}
+
+	playbackBuffers := make([]playbackBuffer, maxOutstanding)
+	playbackBufferSize := int(float64(d.wfx.NSamplesPerSec) * 0.5)
+	availableBuffers := make(chan *playbackBuffer, len(playbackBuffers))
+	defer close(availableBuffers)
+	for i := range playbackBuffers {
+		lpdsb, err := d.ds.CreateSoundBufferSecondary(d.wfx, playbackBufferSize*int(d.wfx.NBlockAlign))
+		if err != nil {
+			return err
+		}
+		playbackBuffers[i] = playbackBuffer{
+			buffer:     lpdsb,
+			maxSamples: playbackBufferSize,
+		}
+		availableBuffers <- &playbackBuffers[i]
+	}
+	defer func() {
+		for _, pb := range playbackBuffers {
+			pb.buffer.Release()
+		}
+	}()
+
+	currentBuffer := <-availableBuffers
+
+	out := make(chan *playbackBuffer, maxOutstanding)
 	go func() {
 		defer close(out)
 		defer cancel()
-		writePos := 0
 		for {
 			select {
 			case <-myCtx.Done():
@@ -137,52 +187,90 @@ func (d *dsoundDevice) PlayWithCtx(ctx context.Context, in <-chan *PremixData) e
 				if !ok {
 					return
 				}
-				var rowWave RowWave
-				//_, writePos, err := lpdsb.GetCurrentPosition()
-				numBytes := row.SamplesLen * int(d.wfx.NBlockAlign)
-				segments, err := lpdsb.Lock(writePos%playbackSize, numBytes)
-				if err != nil {
-					continue
+
+				size := row.SamplesLen
+				pos := 0
+
+				blockAlign := int(d.wfx.NBlockAlign)
+				if size > 0 {
+					event := <-availableEvents
+					currentBuffer.rows = append(currentBuffer.rows, playbackData{
+						event: event,
+						row:   row,
+						pos:   currentBuffer.writePos * blockAlign,
+					})
 				}
-				d.mix.FlattenTo(segments, panmixer, row.SamplesLen, row.Data, row.MixerVolume)
-				if err := lpdsb.Unlock(segments); err != nil {
-					continue
+				for size > 0 {
+					n, err := currentBuffer.Add(&d.mix, row, pos, row.SamplesLen, blockAlign, panmixer)
+					size -= n
+					pos += n
+					if err != nil {
+						if !errors.Is(err, io.EOF) {
+							panic(err)
+						}
+						currentBuffer.writePos = 0
+						out <- currentBuffer
+						currentBuffer = <-availableBuffers
+					}
 				}
-				rowWave.Row = row
-				writePos += numBytes
-				rowWave.PlayOffset = uint32(writePos)
-				out <- rowWave
 			}
 		}
 	}()
-	playBase := uint32(0)
-	go func() {
-		eventCh, closeFunc := win32.EventToChannel(event)
-		defer closeFunc()
-		for {
-			select {
-			case <-eventCh:
-				atomic.AddUint32(&playBase, uint32(playbackSize))
-			case <-done:
-				return
-			}
+	for buffer := range out {
+		endEvent := <-availableEvents
+		if err := d.playWaveBuffer(buffer, endEvent); err != nil {
+			return err
 		}
-	}()
-	for rowWave := range out {
-		for {
-			playPos, _, _ := lpdsb.GetCurrentPosition()
-			base := atomic.LoadUint32(&playBase)
-			if playPos+base >= rowWave.PlayOffset {
-				if d.onRowOutput != nil {
-					d.onRowOutput(KindSoundCard, rowWave.Row)
-				}
-				break
-			}
-			time.Sleep(time.Millisecond * 1)
+		for _, n := range buffer.rows {
+			availableEvents <- n.event
 		}
+		availableEvents <- endEvent
+		buffer.rows = []playbackData{}
+		availableBuffers <- buffer
 	}
 	done <- struct{}{}
 	return nil
+}
+
+func (d *dsoundDevice) playWaveBuffer(p *playbackBuffer, endEvent win32.HANDLE) error {
+	notify, err := p.buffer.GetNotify()
+	if err != nil {
+		return err
+	}
+	defer notify.Release()
+
+	pn := []directsound.PositionNotify{}
+
+	for _, n := range p.rows {
+		pn = append(pn, directsound.PositionNotify{
+			Offset:      uint32(n.pos),
+			EventNotify: n.event,
+		})
+	}
+
+	pn = append(pn, directsound.PositionNotify{
+		Offset:      win32.DSBPN_OFFSETSTOP,
+		EventNotify: endEvent,
+	})
+
+	if err := notify.SetNotificationPositions(pn); err != nil {
+		return err
+	}
+
+	// play (non-looping)
+	if err := p.buffer.Play(false); err != nil {
+		return err
+	}
+
+	for _, n := range p.rows {
+		if d.onRowOutput != nil {
+			d.onRowOutput(KindSoundCard, n.row)
+		}
+		if err := win32.WaitForSingleObjectInfinite(n.event); err != nil {
+			return err
+		}
+	}
+	return win32.WaitForSingleObjectInfinite(endEvent)
 }
 
 // Close closes the wave output device

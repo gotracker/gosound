@@ -32,6 +32,9 @@ const (
 	// DSBPLAY_LOOPING loops a buffer until told not to
 	DSBPLAY_LOOPING = uint32(0x00000001)
 
+	// DSBPN_OFFSETSTOP if a magic value to signify for a PositionNotify that a Stop event notification is requested
+	DSBPN_OFFSETSTOP = uint32(0xFFFFFFFF)
+
 	WAVE_MAPPER = uint32(0xFFFFFFFF)
 )
 
@@ -120,26 +123,20 @@ func GetDesktopWindow() HWND {
 
 // WaitForSingleObjectInfinite will wait infinitely for a single handle value to become available
 func WaitForSingleObjectInfinite(handle HANDLE) error {
-	h := atomic.LoadUintptr((*uintptr)(&handle))
-	s, e := syscall.WaitForSingleObject(syscall.Handle(h), syscall.INFINITE)
-	switch s {
-	case syscall.WAIT_OBJECT_0:
-		break
-	case syscall.WAIT_FAILED:
-		return os.NewSyscallError("WaitForSingleObject", e)
-	default:
-		return errors.New("os: unexpected result from WaitForSingleObject")
-	}
-	return nil
+	return internalWaitForSingleObject(handle, syscall.INFINITE)
 }
 
 // WaitForSingleObject will wait for a single handle value to become available up to a total of `duration` milliseconds
 func WaitForSingleObject(handle HANDLE, duration time.Duration) error {
+	return internalWaitForSingleObject(handle, uint32(duration.Milliseconds()))
+}
+
+func internalWaitForSingleObject(handle HANDLE, duration uint32) error {
 	h := atomic.LoadUintptr((*uintptr)(&handle))
-	s, e := syscall.WaitForSingleObject(syscall.Handle(h), uint32(duration.Milliseconds()))
+	s, e := syscall.WaitForSingleObject(syscall.Handle(h), duration)
 	switch s {
 	case syscall.WAIT_OBJECT_0:
-		break
+		// we're good
 	case syscall.WAIT_FAILED:
 		return os.NewSyscallError("WaitForSingleObject", e)
 	default:
@@ -162,7 +159,6 @@ func EventToChannel(event HANDLE) (<-chan struct{}, func()) {
 			}
 			if err := WaitForSingleObjectInfinite(event); err != nil {
 				panic(err)
-				return
 			}
 			ch <- struct{}{}
 		}
