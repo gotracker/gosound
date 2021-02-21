@@ -8,8 +8,7 @@ import (
 	"time"
 
 	"github.com/gotracker/gomixing/mixing"
-
-	"github.com/gotracker/gosound/internal/win32/winmm"
+	winmm "github.com/heucuva/go-winmm"
 )
 
 const winmmName = "winmm"

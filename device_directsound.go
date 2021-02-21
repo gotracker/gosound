@@ -8,9 +8,10 @@ import (
 	"io"
 
 	"github.com/gotracker/gomixing/mixing"
-
-	"github.com/gotracker/gosound/internal/win32"
-	"github.com/gotracker/gosound/internal/win32/directsound"
+	directsound "github.com/heucuva/go-directsound"
+	win32 "github.com/heucuva/go-win32"
+	winmm "github.com/heucuva/go-winmm"
+	"golang.org/x/sys/windows"
 )
 
 const dsoundName = "directsound"
@@ -20,7 +21,7 @@ type dsoundDevice struct {
 
 	ds           *directsound.DirectSound
 	lpdsbPrimary *directsound.Buffer
-	wfx          *win32.WAVEFORMATEX
+	wfx          *winmm.WAVEFORMATEX
 
 	mix mixing.Mixer
 }
@@ -72,7 +73,7 @@ func (d *dsoundDevice) Play(in <-chan *PremixData) error {
 }
 
 type playbackData struct {
-	event win32.HANDLE
+	event windows.Handle
 	row   *PremixData
 	pos   int
 }
@@ -135,22 +136,15 @@ func (d *dsoundDevice) PlayWithCtx(ctx context.Context, in <-chan *PremixData) e
 	defer close(done)
 
 	myCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
 
-	events := []win32.HANDLE{}
-	availableEvents := make(chan win32.HANDLE, maxOutstandingEvents)
+	events := []windows.Handle{}
+	availableEvents := make(chan windows.Handle, maxOutstandingEvents)
 	defer func() {
 		for _, event := range events {
 			win32.CloseHandle(event)
 		}
 	}()
-	for i := 0; i < cap(availableEvents); i++ {
-		event, err := win32.CreateEvent()
-		if err != nil {
-			return err
-		}
-		events = append(events, event)
-		availableEvents <- event
-	}
 
 	playbackBuffers := make([]playbackBuffer, maxOutstanding)
 	playbackBufferSize := int(float64(d.wfx.NSamplesPerSec) * 0.5)
@@ -173,6 +167,20 @@ func (d *dsoundDevice) PlayWithCtx(ctx context.Context, in <-chan *PremixData) e
 		}
 	}()
 
+	getAvailableEvent := func() (windows.Handle, error) {
+		select {
+		case event := <-availableEvents:
+			return event, nil
+		default:
+			event, err := win32.CreateEvent(nil, false, false, "")
+			if err != nil {
+				return event, err
+			}
+			events = append(events, event)
+			return event, nil
+		}
+	}
+
 	currentBuffer := <-availableBuffers
 
 	out := make(chan *playbackBuffer, maxOutstanding)
@@ -193,7 +201,10 @@ func (d *dsoundDevice) PlayWithCtx(ctx context.Context, in <-chan *PremixData) e
 
 				blockAlign := int(d.wfx.NBlockAlign)
 				if size > 0 {
-					event := <-availableEvents
+					event, err := getAvailableEvent()
+					if err != nil {
+						panic(err)
+					}
 					currentBuffer.rows = append(currentBuffer.rows, playbackData{
 						event: event,
 						row:   row,
@@ -217,7 +228,10 @@ func (d *dsoundDevice) PlayWithCtx(ctx context.Context, in <-chan *PremixData) e
 		}
 	}()
 	for buffer := range out {
-		endEvent := <-availableEvents
+		endEvent, err := getAvailableEvent()
+		if err != nil {
+			return err
+		}
 		if err := d.playWaveBuffer(buffer, endEvent); err != nil {
 			return err
 		}
@@ -232,7 +246,7 @@ func (d *dsoundDevice) PlayWithCtx(ctx context.Context, in <-chan *PremixData) e
 	return nil
 }
 
-func (d *dsoundDevice) playWaveBuffer(p *playbackBuffer, endEvent win32.HANDLE) error {
+func (d *dsoundDevice) playWaveBuffer(p *playbackBuffer, endEvent windows.Handle) error {
 	notify, err := p.buffer.GetNotify()
 	if err != nil {
 		return err
@@ -249,7 +263,7 @@ func (d *dsoundDevice) playWaveBuffer(p *playbackBuffer, endEvent win32.HANDLE) 
 	}
 
 	pn = append(pn, directsound.PositionNotify{
-		Offset:      win32.DSBPN_OFFSETSTOP,
+		Offset:      directsound.DSBPN_OFFSETSTOP,
 		EventNotify: endEvent,
 	})
 
