@@ -29,9 +29,8 @@ type kindGetter interface {
 type createOutputDeviceFunc func(settings Settings) (Device, error)
 
 type deviceDetails struct {
-	Device
 	create createOutputDeviceFunc
-	kind   Kind
+	Kind   Kind
 }
 
 // GetKind returns the kind for the passed in device

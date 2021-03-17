@@ -37,6 +37,6 @@ func newFileDevice(settings Settings) (Device, error) {
 func init() {
 	Map[fileName] = deviceDetails{
 		create: newFileDevice,
-		kind:   KindFile,
+		Kind:   KindFile,
 	}
 }

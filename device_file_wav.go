@@ -50,24 +50,50 @@ func newFileWavDevice(settings Settings) (Device, error) {
 
 	w := bufio.NewWriter(f)
 	// RIFF header
-	w.Write([]byte{'R', 'I', 'F', 'F'})             // ChunkID
-	binary.Write(w, binary.LittleEndian, uint32(0)) // ChunkSize
-	w.Write([]byte{'W', 'A', 'V', 'E'})             // Format
+	if _, err := w.Write([]byte{'R', 'I', 'F', 'F'}); err != nil { // ChunkID
+		return nil, err
+	}
+	if err := binary.Write(w, binary.LittleEndian, uint32(0)); err != nil { // ChunkSize
+		return nil, err
+	}
+	if _, err := w.Write([]byte{'W', 'A', 'V', 'E'}); err != nil { // Format
+		return nil, err
+	}
 
 	// fmt header
-	w.Write([]byte{'f', 'm', 't', ' '})              // Subchunk1ID
-	binary.Write(w, binary.LittleEndian, uint32(16)) // Subchunk1Size
+	if _, err := w.Write([]byte{'f', 'm', 't', ' '}); err != nil { // Subchunk1ID
+		return nil, err
+	}
+	if err := binary.Write(w, binary.LittleEndian, uint32(16)); err != nil { // Subchunk1Size
+		return nil, err
+	}
 	// = win32.WAVEFORMATEX (before the CbSize)
-	binary.Write(w, binary.LittleEndian, uint16(0x001))                     // AudioFormat // = win32.WAVE_FORMAT_PCM
-	binary.Write(w, binary.LittleEndian, uint16(settings.Channels))         // NumChannels
-	binary.Write(w, binary.LittleEndian, uint32(settings.SamplesPerSecond)) // SampleRate
-	binary.Write(w, binary.LittleEndian, uint32(byteRate))                  // ByteRate
-	binary.Write(w, binary.LittleEndian, uint16(blockAlign))                // BlockAlign
-	binary.Write(w, binary.LittleEndian, uint16(settings.BitsPerSample))    // BitsPerSample
+	if err := binary.Write(w, binary.LittleEndian, uint16(0x001)); err != nil { // AudioFormat // = win32.WAVE_FORMAT_PCM
+		return nil, err
+	}
+	if err := binary.Write(w, binary.LittleEndian, uint16(settings.Channels)); err != nil { // NumChannels
+		return nil, err
+	}
+	if err := binary.Write(w, binary.LittleEndian, uint32(settings.SamplesPerSecond)); err != nil { // SampleRate
+		return nil, err
+	}
+	if err := binary.Write(w, binary.LittleEndian, uint32(byteRate)); err != nil { // ByteRate
+		return nil, err
+	}
+	if err := binary.Write(w, binary.LittleEndian, uint16(blockAlign)); err != nil { // BlockAlign
+		return nil, err
+	}
+	if err := binary.Write(w, binary.LittleEndian, uint16(settings.BitsPerSample)); err != nil { // BitsPerSample
+		return nil, err
+	}
 
 	// data header
-	w.Write([]byte{'d', 'a', 't', 'a'})             // Subchunk2ID
-	binary.Write(w, binary.LittleEndian, uint32(0)) // Subchunk2Size
+	if _, err := w.Write([]byte{'d', 'a', 't', 'a'}); err != nil { // Subchunk2ID
+		return nil, err
+	}
+	if err := binary.Write(w, binary.LittleEndian, uint32(0)); err != nil { // Subchunk2Size
+		return nil, err
+	}
 
 	fd.f = f
 	fd.w = w
@@ -99,8 +125,11 @@ func (d *fileDeviceWav) PlayWithCtx(ctx context.Context, in <-chan *PremixData) 
 				return nil
 			}
 			mixedData := d.mix.Flatten(panmixer, row.SamplesLen, row.Data, row.MixerVolume)
-			d.w.Write(mixedData)
-			d.sz += uint32(len(mixedData))
+			sz, err := d.w.Write(mixedData)
+			if err != nil {
+				return err
+			}
+			d.sz += uint32(sz)
 			if d.onRowOutput != nil {
 				d.onRowOutput(KindFile, row)
 			}
@@ -112,10 +141,18 @@ func (d *fileDeviceWav) PlayWithCtx(ctx context.Context, in <-chan *PremixData) 
 func (d *fileDeviceWav) Close() {
 	d.w.Flush()
 	chunkSize := 36 + d.sz
-	d.f.Seek(wavFileChunkSizePos, 0)
-	binary.Write(d.w, binary.LittleEndian, uint32(chunkSize)) // ChunkSize
-	d.f.Seek(wavFileSubchunk2SizePos, 0)
-	binary.Write(d.w, binary.LittleEndian, uint32(d.sz)) // Subchunk2Size
+	if _, err := d.f.Seek(wavFileChunkSizePos, 0); err != nil {
+		return
+	}
+	if err := binary.Write(d.w, binary.LittleEndian, uint32(chunkSize)); err != nil { // ChunkSize
+		return
+	}
+	if _, err := d.f.Seek(wavFileSubchunk2SizePos, 0); err != nil {
+		return
+	}
+	if err := binary.Write(d.w, binary.LittleEndian, uint32(d.sz)); err != nil { // Subchunk2Size
+		return
+	}
 	d.w.Flush()
 	d.w = nil
 	d.f.Close()

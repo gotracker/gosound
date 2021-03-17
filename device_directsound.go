@@ -300,6 +300,6 @@ func (d *dsoundDevice) Close() {
 func init() {
 	Map[dsoundName] = deviceDetails{
 		create: newDSoundDevice,
-		kind:   KindSoundCard,
+		Kind:   KindSoundCard,
 	}
 }

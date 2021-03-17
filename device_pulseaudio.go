@@ -90,6 +90,6 @@ func (d *pulseaudioDevice) Close() {
 func init() {
 	Map[pulseaudioName] = deviceDetails{
 		create: newPulseAudioDevice,
-		kind:   KindSoundCard,
+		Kind:   KindSoundCard,
 	}
 }

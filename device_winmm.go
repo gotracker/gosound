@@ -120,6 +120,6 @@ func (d *winmmDevice) Close() {
 func init() {
 	Map[winmmName] = deviceDetails{
 		create: newWinMMDevice,
-		kind:   KindSoundCard,
+		Kind:   KindSoundCard,
 	}
 }
