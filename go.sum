@@ -2,8 +2,8 @@ github.com/d4l3k/messagediff v1.2.2-0.20190829033028-7e0a312ae40b/go.mod h1:Oozb
 github.com/go-audio/audio v1.0.0/go.mod h1:6uAu0+H2lHkwdGsAY+j2wHPNPpPoeg5AaEFh9FlA+Zs=
 github.com/go-audio/riff v1.0.0/go.mod h1:l3cQwc85y79NQFCRB7TiPoNiaijp6q8Z0Uv38rVG498=
 github.com/go-audio/wav v1.0.0/go.mod h1:3yoReyQOsiARkvPl3ERCi8JFjihzG6WhjYpZCf5zAWE=
-github.com/gotracker/gomixing v1.1.1 h1:vIoByMOPC5Onzid5u1Vtf4L7v+WkJzjpnA0XBXzSYmQ=
-github.com/gotracker/gomixing v1.1.1/go.mod h1:KSwLWBk4HMKTVZH+zq4Db7nlDVcRegIL4uStkat0ASg=
+github.com/gotracker/gomixing v1.1.2 h1:ybaPf1MBtBQaAeSj40Os8EUPurDySULHA0YR7KtL0JI=
+github.com/gotracker/gomixing v1.1.2/go.mod h1:KSwLWBk4HMKTVZH+zq4Db7nlDVcRegIL4uStkat0ASg=
 github.com/heucuva/go-directsound v1.0.0 h1:bN33QBwLmF95ZACyvJL9NDhauhMANi3g0tlsg0FaoEQ=
 github.com/heucuva/go-directsound v1.0.0/go.mod h1:TCaliTXvuotXwuP1G9hasPHWqWrRnSlGRnvqswKf//w=
 github.com/heucuva/go-win32 v1.0.0 h1:CXJEwYkGaW2ZubKt8GZO/g0z7xsKam97mMZjkzgE1IA=

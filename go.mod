@@ -3,7 +3,7 @@ module github.com/gotracker/gosound
 go 1.18
 
 require (
-	github.com/gotracker/gomixing v1.1.1
+	github.com/gotracker/gomixing v1.1.2
 	github.com/heucuva/go-directsound v1.0.0
 	github.com/heucuva/go-win32 v1.0.0
 	github.com/heucuva/go-winmm v1.0.0
